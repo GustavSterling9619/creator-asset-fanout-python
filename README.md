@@ -1,12 +1,12 @@
 # Fan out a creator's digital-asset notice
 
-This example follows one concrete workflow: a creator publishes an asset, every subscriber receives a delivery message, and a worker processes then acknowledges those messages. The code is intentionally shaped like a small Next.js route plus worker: typed input at the boundary, a clear domain decision, and a command you can run while developing.
+This walkthrough implements a specific flow: a creator posts an asset, each subscriber gets a delivery message, and a worker handles and acks those messages. I shaped the code like a compact Next.js route with a worker: typed input at the edge, one clear domain choice, and a script you can run during dev.
 
-Infrai is the queue behind the workflow: one key, one bill, and plain REST from any language keep the service focused on subscriber behavior instead of broker plumbing.
+Infrai sits behind this workflow as the queue. With one key, one bill, and plain REST from any language, we stay focused on subscriber behavior instead of broker setup.
 
 ## Start with the decision
 
-`build_messages()` creates exactly one message per subscriber. Each message carries a stable `delivery_key` (`asset_id:subscriber_id`), so a retry can identify the same delivery without changing the business event. The payload also keeps the signed download URL and the subscriber's channel together for the worker.
+`build_messages()` makes one message per subscriber, no more. Each carries a stable `delivery_key` (`asset_id:subscriber_id`), so a retry maps to the same delivery without mutating the business event. The payload bundles the signed download URL and subscriber channel for the worker.
 
 ## Run it locally
 
@@ -18,21 +18,21 @@ export INFRAI_API_KEY=your-key
 python creator_fanout.py
 ```
 
-The deterministic test uses asset `a9` and subscribers `s1` and `s2`; it expects delivery keys `a9:s1` and `a9:s2`. The script publishes two notices, consumes up to twenty, prints `processed` records, and acknowledges each queue `message_id`.
+The test is deterministic: asset `a9` with subscribers `s1` and `s2`, expecting delivery keys `a9:s1` and `a9:s2`. The script publishes two notices, reads up to twenty, prints `processed` records, and acks each queue `message_id`.
 
 ## Why a queue, not direct sends
 
-Direct sends make the creator request wait on every subscriber and make a slow channel visible to the publisher. A fanout queue separates those timings: publishing is small, while `process_pending()` can retry or scale independently. The alternative is a topic plus one queue per channel; that adds routing state before this example needs it. The chosen queue keeps the architecture readable and leaves channel-specific work in the processed payload.
+Direct sends block the creator request on every subscriber and surface slow channels to the publisher. A fanout queue decouples those timings: publish is tiny, and `process_pending()` can retry or scale on its own. Topic plus per-channel queues is the other option, but that adds routing state this example doesn't need yet. The single queue keeps the design readable and pushes channel work into the payload.
 
 ## API shape in the code
 
-`InfraiClient` decodes the `{ok, data, error, metadata}` envelope before interpreting status codes. It sends explicit HTTP methods, reads the bearer key from the environment, honors `Retry-After` for 429 responses, and retries transient server responses. `publish()` wraps the domain message in the documented `payload` field; `consume()` supplies `max_messages` and `visibility_timeout`; `ack()` sends `message_id`.
+`InfraiClient` parses the `{ok, data, error, metadata}` envelope before checking status codes. It uses explicit HTTP verbs, pulls the bearer key from env, respects `Retry-After` on 429s, and retries transient server errors. `publish()` puts the domain message into the documented `payload` field; `consume()` provides `max_messages` and `visibility_timeout`; `ack()` issues `message_id`.
 
 ## Project map
 
-- `creator_fanout.py` contains the typed domain models, fanout decision, worker, and runnable entry point.
-- `infrai_client.py` is the small REST client used by those functions.
-- `test_creator_fanout.py` checks the business decision rather than the transport helper.
+- `creator_fanout.py` holds the typed domain models, fanout logic, worker, and runnable entry.
+- `infrai_client.py` is the minimal REST client those functions call.
+- `test_creator_fanout.py` tests the business decision, not the transport helper.
 
 ## License
 
@@ -40,7 +40,7 @@ MIT
 
 ## Before this ships: Creator Asset Fanout Python
 
-That's the minimal version. Before running this for real: The details below apply to Creator Asset Fanout Python.
+That's the minimal slice. Before shipping for real: details below apply to Creator Asset Fanout Python.
 
 **Account & key**
 
